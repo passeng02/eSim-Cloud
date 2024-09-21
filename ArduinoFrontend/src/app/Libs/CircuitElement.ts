@@ -3,6 +3,7 @@ import { Wire } from './Wire';
 import { isNull } from 'util';
 import { BoundingBox } from './Geometry';
 import { UndoUtils } from './UndoUtils';
+import { isDragEnable } from '../simulator/simulator.component';
 
 /**
  * Abstract Class Circuit Elements
@@ -297,12 +298,21 @@ export abstract class CircuitElement {
    * Add Drag listener to the components
    */
   setDragListeners() {
-    // let tmpx = 0;
-    // let tmpy = 0;
+
     let fdx = 0;
     let fdy = 0;
     let tmpar = [];
     this.elements.drag((dx, dy) => {
+      if (isDragEnable.value === true) {
+        this.elements.transform(`t${this.tx + dx},${this.ty + dy}`);
+        // tmpx = this.tx + dx;
+        // tmpy = this.ty + dy;
+        fdx = dx;
+        fdy = dy;
+        for (let i = 0; i < this.nodes.length; ++i) {
+          this.nodes[i].move(tmpar[i][0] + dx, tmpar[i][1] + dy);
+        }
+        window['onDragEvent'](this);
       const bBox = this.elements.getBBox();
       const cx = this.x + bBox.height / 2;
       const cy = this.y + bBox.width / 2 ;
@@ -313,7 +323,6 @@ export abstract class CircuitElement {
       for (let i = 0; i < this.nodes.length; ++i) {
         this.nodes[i].move(tmpar[i][0] + dx, tmpar[i][1] + dy);
       }
-      window['onDragEvent'](this);
     }, () => {
       fdx = 0;
       fdy = 0;
@@ -500,6 +509,42 @@ export abstract class CircuitElement {
    * Return the Name of the component.Can be inheriter to return custom name.
    */
   getName() { return this.title; }
+  /**
+   * Function to move/transform an element
+   * @param fdx relative x position to move
+   * @param fdy relative y position to move
+   */
+  getNodesCoord(): number[] {
+    if (isDragEnable.value === true) {
+      const tmpar = [];
+      for (const node of this.nodes) {
+        tmpar.push(
+          [node.x, node.y]
+        );
+      }
+      return tmpar;
+    }
+  }
+  dragAlong(tmpar: any, fdx: number, fdy: number): any {
+    if (isDragEnable.value === true) {
+      this.elements.transform(`t${this.tx + fdx},${this.ty + fdy}`);
+      for (const node of this.nodes) {
+        tmpar.push(
+          [node.x, node.y]
+        );
+      }
+      for (let i = 0; i < this.nodes.length; ++i) {
+        this.nodes[i].move(tmpar[i][0] + fdx, tmpar[i][1] + fdy);
+      }
+    }
+  }
+  dragAlongStop(x: number, y: number): void {
+    if (isDragEnable.value === true ) {
+      this.tx = x;
+      this.ty = y;
+    }
+  }
+
 
   /**
    * Function to move/transform an element
@@ -507,19 +552,21 @@ export abstract class CircuitElement {
    * @param fdy relative y position to move
    */
   transformPosition(fdx: number, fdy: number): void {
-    const tmpar = [];
-    this.elements.transform(`t${this.tx + fdx},${this.ty + fdy}`);
+    if (isDragEnable.value === true) {
+      const tmpar = [];
+      this.elements.transform(`t${this.tx + fdx},${this.ty + fdy}`);
 
-    for (const node of this.nodes) {
-      tmpar.push(
-        [node.x, node.y]
-      );
+      for (const node of this.nodes) {
+        tmpar.push(
+          [node.x, node.y]
+        );
+      }
+      for (let i = 0; i < this.nodes.length; ++i) {
+        this.nodes[i].move(tmpar[i][0] + fdx, tmpar[i][1] + fdy);
+      }
+      this.tx += fdx;
+      this.ty += fdy;
     }
-    for (let i = 0; i < this.nodes.length; ++i) {
-      this.nodes[i].move(tmpar[i][0] + fdx, tmpar[i][1] + fdy);
-    }
-    this.tx += fdx;
-    this.ty += fdy;
   }
 
   /**

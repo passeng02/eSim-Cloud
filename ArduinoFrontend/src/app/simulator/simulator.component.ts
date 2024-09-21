@@ -24,7 +24,14 @@ import { sample } from 'rxjs/operators';
  * Declare Raphael so that build don't throws error
  */
 declare var Raphael;
-
+/**
+ * Disable drag while Simulation
+ */
+export let isDragEnable = { value: true };
+/**
+ * Stoping Unnecessary drag ;
+ */
+export let stopdrag = { value: false };
 /**
  * Class For Simulator Page (Component)
  */
@@ -80,6 +87,10 @@ export class SimulatorComponent implements OnInit, OnDestroy {
    */
   disabled = false;
   /**
+   * Simulation button toggle for disabling adding_new_component option
+   */
+  isAddComponentEnabled = true;
+  /**
    * Stores the toggle status for expanding Virtual console
    */
   toggle1 = false;
@@ -123,10 +134,6 @@ export class SimulatorComponent implements OnInit, OnDestroy {
    * Hide/Show submit button
    */
   submitButtonVisibility = false;
-  /**
-   * Whether the LTI user is allowed to see the code
-   */
-  codeVisibility = true;
   /**
    * LTI ID of LTI App (if simulator is opened on LMS)
    */
@@ -260,7 +267,6 @@ export class SimulatorComponent implements OnInit, OnDestroy {
         this.LoadOnlineProject(v.id, v.offline);
         this.submitButtonVisibility = false;
       }
-      console.log(this.projectId);
     });
 
 
@@ -349,13 +355,12 @@ export class SimulatorComponent implements OnInit, OnDestroy {
 
   getSimRecSelectChange(value) {
     this.simSelected = value;
-    console.log(this.simSelected);
   }
 
   /**
    * Get the simulation result selected
    */
-   onSelectionChanges(event) {
+  onSelectionChanges(event) {
     this.getSimRecSelectChange(event.value);
   }
 
@@ -365,15 +370,27 @@ export class SimulatorComponent implements OnInit, OnDestroy {
   showCode(ltiID) {
     const token = Login.getToken();
     this.api.viewArduinoCode(ltiID, token).subscribe((v) => {
-      console.log(v['view']);
-      this.codeVisibility = v['view'];
+      if (!v['view']) {
+        for (const key in window['ArduinoUno_name']) {
+          if (window['ArduinoUno_name'][key]) {
+            window['ArduinoUno_name'][key].code = '';
+          }
+        }
+      }
     });
   }
 
   /** Function called when Start Simulation button is triggered */
   StartSimulation() {
     this.disabled = true;
+    // if (!this.graphToggle) {
+    //   this.graphToggle = !this.graphToggle;
+    // }
     // Clears Output in Console
+    this.hide_buttons();
+    this.isAddComponentEnabled = false;
+    isDragEnable.value = false;
+
     Workspace.ClearConsole();
     // prints the output in console
     window['printConsole']('Starting Simulation', ConsoleType.INFO);
@@ -396,6 +413,9 @@ export class SimulatorComponent implements OnInit, OnDestroy {
       // Hide loading animation
       sim.style.display = 'none';
       Workspace.stopSimulation(() => {
+        this.visible_buttons();
+        this.isAddComponentEnabled = true;
+        isDragEnable.value = true;
         this.disabled = false;
         document.getElementById('simload').style.display = 'none';
       });
@@ -486,7 +506,9 @@ export class SimulatorComponent implements OnInit, OnDestroy {
    * @param key string
    */
   componentdbClick(key: string) {
-    Workspace.addComponent(key, 100, 100, 0, 0);
+    if (this.isAddComponentEnabled) {
+      Workspace.addComponent(key, 100, 100, 0, 0);
+    }
   }
   /**
    * Event is fired when the user starts dragging an component or text selection.
@@ -495,8 +517,12 @@ export class SimulatorComponent implements OnInit, OnDestroy {
    */
   dragStart(event: DragEvent, key: string) {
     // Save Dump of current Workspace
-    event.dataTransfer.dropEffect = 'copyMove';
-    event.dataTransfer.setData('text', key);
+    if (!this.isAddComponentEnabled) {
+      event.preventDefault();
+    } else {
+      event.dataTransfer.dropEffect = 'copyMove';
+      event.dataTransfer.setData('text', key);
+    }
   }
   /**
    * Function calls zoomIn/Out() mentioned in Workspace.ts
@@ -535,11 +561,26 @@ export class SimulatorComponent implements OnInit, OnDestroy {
     });
     viewref.afterClosed();
   }
+  /** Hide buttons while Simulation is running */
+  hide_buttons() {
+    const buttonss = document.querySelectorAll('.hidebtn') as NodeListOf<HTMLButtonElement>;
+    buttonss.forEach((button) => {
+      button.disabled = true;
+    });
+  }
+  /** make butoons visible */
+  visible_buttons() {
+    const buttonss = document.querySelectorAll('.hidebtn') as NodeListOf<HTMLButtonElement>;
+    buttonss.forEach((button) => {
+      button.disabled = false;
+    });
+  }
   /** Function deletes the component */
   delete() {
     Workspace.DeleteComponent();
     Workspace.hideContextMenu();
   }
+
   /** Function pastes the component */
   paste() {
     Workspace.pasteComponent();
@@ -728,7 +769,6 @@ export class SimulatorComponent implements OnInit, OnDestroy {
    * @param data any
    */
   LoadProject(data: any) {
-    // console.log(data);
     this.projectTitle = data.project.name;
     this.description = data.project.description;
     this.title.setTitle(this.projectTitle + ' | Arduino On Cloud');
@@ -909,13 +949,17 @@ export class SimulatorComponent implements OnInit, OnDestroy {
    * Undo Operation
    */
   undoChange() {
+    stopdrag.value = true;
     UndoUtils.workspaceUndo();
+    stopdrag.value = false;
   }
   /**
    * Redo Operation
    */
   redoChange() {
+    stopdrag.value = true;
     UndoUtils.workspaceRedo();
+    stopdrag.value = false;
   }
   /**
    * Create a new branch for project
@@ -1008,7 +1052,7 @@ export class SimulatorComponent implements OnInit, OnDestroy {
           });
         return;
       }, err => {
-        AlertService.showAlert(err['message']);
+        AlertService.showAlert(err['error']['error']);
         console.log(err);
       });
     });
@@ -1036,21 +1080,15 @@ export class SimulatorComponent implements OnInit, OnDestroy {
    * Return the list of student simulation records
    */
   getSimRecord() {
-    const token = Login.getToken();
     const temp = [];
-    if (token) {
-      this.api.getLTISimulationData(this.id, this.ltiId, token).subscribe((v) => {
-        for (const val of v) {
-          const data = JSON.parse(val.result.replaceAll('\'', '\"'));
-          const key = (Object.keys(data));
-          temp.push({id: val.id, length: data[key[0]]['length']});
-        }
-        this.simData = temp;
-      });
-    } else {
-      // if no token is present then show this message
-      AlertService.showAlert('Please Login to Continue');
-    }
+    this.api.getLTISimulationData(this.id, this.ltiId).subscribe((v) => {
+      for (const val of v) {
+        const data = JSON.parse(val.result.replaceAll('\'', '\"'));
+        const key = (Object.keys(data));
+        temp.push({ id: val.id, length: data[key[0]]['length'] });
+      }
+      this.simData = temp;
+    });
   }
 
 }

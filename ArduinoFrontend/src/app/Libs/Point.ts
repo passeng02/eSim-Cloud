@@ -2,6 +2,10 @@ import { Wire } from './Wire';
 import { CircuitElement } from './CircuitElement';
 import { isNull } from 'util';
 import { BoundingBox } from './Geometry';
+import _ from 'lodash';
+import { BreadBoard } from './General';
+import { isDragEnable } from '../simulator/simulator.component';
+
 
 /**
  * Declare window so that custom created function don't throw error
@@ -60,6 +64,10 @@ export class Point {
    * Callback called when we connect wire.
    */
   connectCallback: any = null;
+  /*
+  Callback called on disconnecting a wire.
+  */
+  disconnectCallback: any = null;
   /**
    * The Value of the node
    */
@@ -123,6 +131,36 @@ export class Point {
           this.hoverCallback(this.x, this.y);
         }
         window.showBubble(this.label, evt.clientX, evt.clientY);
+        if (this.parent.keyName === 'BreadBoard') {
+
+          const ref = this.parent as BreadBoard;
+
+          if (this.label === '+' || this.label === '-') {
+            for (const point of ref.sameYNodes[this.y]) {
+              if (this.id === point.id) {
+                this.highlight();
+              } else {
+                point.outline();
+              }
+            }
+
+          } else {
+            const groups = ref.getGroupings();
+            const index = groups.findIndex(prefix => prefix.includes(this.label.charAt(0)));
+
+            for (const point of ref.sameXNodes[this.x]) {
+              if (point.label !== '+' && point.label !== '-') {
+                if (groups[index].includes(point.label.charAt(0))) {
+                  if (this.id === point.id) {
+                    this.highlight();
+                  } else {
+                    point.outline();
+                  }
+                }
+              }
+            }
+          }
+        }
       } else {
         // TODO: Do not show node highligtht
         this.remainHidden();
@@ -133,6 +171,31 @@ export class Point {
         this.hoverCloseCallback(this.x, this.y);
       }
       window.hideBubble();
+
+      if (this.parent.keyName === 'BreadBoard') {
+
+        const ref = this.parent as BreadBoard;
+
+        if (this.label === '+' || this.label === '-') {
+          for (const point of ref.sameYNodes[this.y]) {
+            if (this.id === point.id) {
+              this.undoHighlight();
+            } else {
+              point.undoOutline();
+            }
+          }
+        } else {
+          for (const point of ref.sameXNodes[this.x]) {
+            if (point.label !== '+' && point.label !== '-') {
+              if (this.id === point.id) {
+                this.undoHighlight();
+              } else {
+                point.undoOutline();
+              }
+            }
+          }
+        }
+      }
       // Show node highligtht
       this.remainShow();
     });
@@ -215,6 +278,10 @@ export class Point {
     this.soldered = false;
     const newClass = this.body.node.getAttribute('class').replace(' solder-highlight', '');
     this.body.node.setAttribute('class', newClass);
+
+    if (this.disconnectCallback) {
+      this.disconnectCallback(this);
+    }
   }
 
   connectWire(wire, pushToUndo = true) {
@@ -235,9 +302,11 @@ export class Point {
    * Creates and originates new wire at the point
    */
   startNewWire() {
+    if (isDragEnable.value === true) {
     const wire = new Wire(this.canvas, this);
     this.connectedTo = wire;
     return wire;
+    }
   }
 
   /**
@@ -271,6 +340,15 @@ export class Point {
 
   undoHighlight() {
     const newClass = this.body.node.getAttribute('class').replace(' highlight', '');
+    this.body.node.setAttribute('class', newClass);
+  }
+  outline() {
+    const newClass = `${this.body.node.getAttribute('class')} outline`;
+    this.body.node.setAttribute('class', newClass);
+  }
+
+  undoOutline() {
+    const newClass = this.body.node.getAttribute('class').replace(' outline', '');
     this.body.node.setAttribute('class', newClass);
   }
 

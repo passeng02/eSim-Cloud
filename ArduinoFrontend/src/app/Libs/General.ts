@@ -4,12 +4,12 @@ import { areBoundingBoxesIntersecting } from './RaphaelUtils';
 import _ from 'lodash';
 import { Wire } from './Wire';
 import { UndoUtils } from './UndoUtils';
-
+import { isDragEnable } from '../simulator/simulator.component';
+import { stopdrag } from '../simulator/simulator.component';
 /**
  * Declare window so that custom created function don't throw error
  */
 declare var window;
-
 /**
  * Node tuple class to store breadboard node and element node which are in proximity
  */
@@ -56,6 +56,10 @@ export class Resistor extends CircuitElement {
    */
   toleranceIndex: number;
   /**
+   * flag for resistor :- if its value is default or imported from json .
+   */
+  loadresistor: boolean;
+  /**
    * Resistor constructor
    * @param canvas Raphael Canvas (Paper)
    * @param x  position x
@@ -73,8 +77,12 @@ export class Resistor extends CircuitElement {
       Resistor.unitLabels = this.data.unitLabels;
       Resistor.unitValues = this.data.unitValues;
     }
-    this.value = this.data.initial;
-    this.toleranceIndex = this.data.initialToleranceIndex;
+    if (this.loadresistor === true) {
+      this.loadresistor = false;
+    } else {
+      this.value = this.data.initial;
+      this.toleranceIndex = this.data.initialToleranceIndex;
+    }
     this.updateColors();
     delete this.data;
     this.data = null;
@@ -101,9 +109,10 @@ export class Resistor extends CircuitElement {
    * function loads the SaveData()
    * @param data save object
    */
-  LoadData(data: any) {
+  LoadData = (data: any) => {
     this.value = data.data.value;
     this.toleranceIndex = data.data.tolerance;
+    this.loadresistor = true;
   }
   /**
    * Updates Resistor Properties
@@ -272,6 +281,20 @@ export class Resistor extends CircuitElement {
    */
   closeSimulation(): void {
   }
+
+  /**
+   * Get resistance value of resistor
+   */
+  getResistance() {
+    return this.value;
+  }
+  /**
+   * Get ID of the resistor
+   * TODO: Add this function inside CircuitElements.ts instead
+   */
+  getID() {
+    return this.id;
+  }
 }
 
 /**
@@ -287,6 +310,11 @@ export class BreadBoard extends CircuitElement {
    * Set to keep track of visited nodes
    */
   static visitedNodesv2 = new Set();
+
+  /**
+   * Stores group of points which are interconnected
+   */
+  static groupings: any = [];
 
   /**
    * Nodes that are connected
@@ -317,6 +345,7 @@ export class BreadBoard extends CircuitElement {
    * Map of y and nodes with y-coordinates as y
    */
   public sameYNodes: { [key: string]: Point[] } = {};
+
 
   /**
    * Breadboard constructor
@@ -581,6 +610,10 @@ export class BreadBoard extends CircuitElement {
   init() {
     this.sortedNodes = _.sortBy(this.nodes, ['x', 'y']);
 
+    if (BreadBoard.groupings.length === 0) {
+      BreadBoard.groupings = this.data.groupings;
+    }
+
     // initialise sameX and sameY node sets
     for (const node of this.nodes) {
       // create the set for x
@@ -597,9 +630,14 @@ export class BreadBoard extends CircuitElement {
       node.connectCallback = (item) => {
         this.joined.push(item);
       };
+      node.disconnectCallback = (item) => {
+        const index = this.joined.indexOf(item);
+        if (index > -1) {
+          this.joined.splice(index, 1);
+        }
+      };
     }
     this.elements.toBack();
-
     // Remove the drag event
     this.elements.undrag();
     let tmpx = 0;
@@ -608,8 +646,84 @@ export class BreadBoard extends CircuitElement {
     let fdy = 0;
     let tmpar = [];
     let tmpar2 = [];
+    let ConnEleList = [];
+    let NodeList = [];
+    let tmpx2 = [];
+    let tmpy2 = [];
     // Create Custom Drag event
     this.elements.drag((dx, dy) => {
+      if (isDragEnable.value === true) {
+        this.elements.transform(`t${this.tx + dx},${this.ty + dy}`);
+        tmpx = this.tx + dx;
+        tmpy = this.ty + dy;
+        fdx = dx;
+        fdy = dy;
+        for (let i = 0; i < this.joined.length; ++i) {
+          this.joined[i].move(tmpar[i][0] + dx, tmpar[i][1] + dy);
+        }
+        for (let i = 0; i < ConnEleList.length; ++i) {
+          ConnEleList[i].dragAlong(NodeList[i], dx, dy);
+          tmpx2[i] = ConnEleList[i].tx + dx;
+          tmpy2[i] = ConnEleList[i].ty + dy;
+        }
+        stopdrag.value = true;
+      }
+    }, () => {
+      if (isDragEnable.value === true) {
+        fdx = 0;
+        fdy = 0;
+        tmpar = [];
+        tmpar2 = [];
+        for (const node of this.nodes) {
+          tmpar2.push(
+            [node.x, node.y]
+          );
+          node.remainHidden();
+        }
+        for (const node of this.joined) {
+          let ElementFlag = false;
+          tmpar.push(
+            [node.x, node.y]
+          );
+          node.remainShow();
+          if (node.connectedTo != null) {
+            const ConnElement1 = node.connectedTo.start.parent;
+            const ConnElement2 = node.connectedTo.end.parent;
+            console.log(ConnElement1.keyName);
+            console.log(ConnElement2.keyName);
+            if (ConnElement1.keyName !== 'BreadBoard') {
+              for (const ele of ConnEleList) {
+                if (ele === ConnElement1) {
+                  ElementFlag = true;
+                  break;
+                }
+              }
+              const PlaceableCheck = 'isBreadBoardPlaceable' in ConnElement1.info.properties;
+              const isBreadBoardPlaceable = ConnElement1.info.properties.isBreadBoardPlaceable;
+              if (!ElementFlag && PlaceableCheck && isBreadBoardPlaceable === 1) {
+                ConnEleList.push(ConnElement1);
+                tmpx2.push(0);
+                tmpy2.push(0);
+                NodeList.push(ConnElement1.getNodesCoord());
+              }
+            } else {
+              for (const ele of ConnEleList) {
+                if (ele === ConnElement1) {
+                  ElementFlag = true;
+                  break;
+                }
+              }
+              const PlaceableCheck = 'isBreadBoardPlaceable' in ConnElement2.info.properties;
+              const isBreadBoardPlaceable = ConnElement2.info.properties.isBreadBoardPlaceable;
+              if (!ElementFlag && PlaceableCheck && isBreadBoardPlaceable === 1) {
+                ConnEleList.push(ConnElement2);
+                tmpx2.push(0);
+                tmpy2.push(0);
+                NodeList.push(ConnElement2.getNodesCoord());
+              }
+            }
+          }
+        }
       const bBox = this.elements.getBBox();
       const cx = this.x + bBox.height / 2;
       const cy = this.y + bBox.width / 2 ;
@@ -622,9 +736,55 @@ export class BreadBoard extends CircuitElement {
       for (let i = 0; i < this.joined.length; ++i) {
         this.joined[i].move(tmpar[i][0] + dx, tmpar[i][1] + dy);
       }
+
     }, () => {
-      fdx = 0;
-      fdy = 0;
+      // Push dump to Undo stack & Reset
+      if (isDragEnable.value === true) {
+        UndoUtils.pushChangeToUndoAndReset({ keyName: this.keyName, element: this.save(), event: 'drag', dragJson: { dx: fdx, dy: fdy } });
+        for (let i = 0; i < this.nodes.length; ++i) {
+          this.nodes[i].move(tmpar2[i][0] + fdx, tmpar2[i][1] + fdy);
+          this.nodes[i].remainShow();
+        }
+        tmpar2 = [];
+
+        this.tx = tmpx;
+        this.ty = tmpy;
+        // reBuild SameNodeObject after drag stop
+        if (stopdrag.value === true) {
+          for (let i = 0; i < ConnEleList.length; i++) {
+            ConnEleList[i].dragAlongStop(tmpx2[i], tmpy2[i]);
+          }
+        }
+        ConnEleList = [];
+        NodeList = [];
+        tmpx2 = [];
+        tmpy2 = [];
+        tmpar = [];
+        this.reBuildSameNodes();
+        stopdrag.value = false;
+      }
+    });
+  }
+
+  /**
+   * Function to move/transform breadboard
+   * @param fdx relative x position to move
+   * @param fdy relative y position to move
+   */
+  transformBoardPosition(fdx: number, fdy: number): void {
+    if (isDragEnable.value === true && stopdrag.value === true) {
+      let tmpar = [];
+      let tmpar2 = [];
+      let tmpx = 0;
+      let tmpy = 0;
+      let ffdx = 0;
+      let ffdy = 0;
+      let ConnEleList = [];
+      let NodeList = [];
+      let tmpx2 = [];
+      let tmpy2 = [];
+      ffdx = 0;
+      ffdy = 0;
       tmpar = [];
       tmpar2 = [];
       for (const node of this.nodes) {
@@ -638,70 +798,73 @@ export class BreadBoard extends CircuitElement {
           [node.x, node.y]
         );
         node.remainShow();
+        const ConnElement1 = node.connectedTo.start.parent;
+        const ConnElement2 = node.connectedTo.end.parent;
+        console.log(ConnElement1.keyName);
+        console.log(ConnElement2.keyName);
+        let ElementFlag = false;
+        if (ConnElement1.keyName !== 'BreadBoard') {
+          for (const ele of ConnEleList) {
+            if (ele === ConnElement1) {
+              ElementFlag = true;
+              break;
+            }
+          }
+          if (!ElementFlag && ConnElement1.info.properties.isBreadBoardPlaceable === 1) {
+            ConnEleList.push(ConnElement1);
+            tmpx2.push(0);
+            tmpy2.push(0);
+            NodeList.push(ConnElement1.getNodesCoord());
+          }
+        } else {
+          for (const ele of ConnEleList) {
+            if (ele === ConnElement1) {
+              ElementFlag = true;
+              break;
+            }
+          }
+          if (!ElementFlag && ConnElement2.info.properties.isBreadBoardPlaceable === 1) {
+            ConnEleList.push(ConnElement2);
+            tmpx2.push(0);
+            tmpy2.push(0);
+            NodeList.push(ConnElement2.getNodesCoord());
+          }
+        }
       }
 
-    }, () => {
-      // Push dump to Undo stack & Reset
-      UndoUtils.pushChangeToUndoAndReset({ keyName: this.keyName, element: this.save(), event: 'drag', dragJson: { dx: fdx, dy: fdy } });
+      this.elements.transform(`t${this.tx + fdx},${this.ty + fdy}`);
+      tmpx = this.tx + fdx;
+      tmpy = this.ty + fdy;
+      ffdx = fdx;
+      ffdy = fdy;
+      for (let i = 0; i < this.joined.length; ++i) {
+        this.joined[i].move(tmpar[i][0] + fdx, tmpar[i][1] + fdy);
+      }
+
+      for (let i = 0; i < ConnEleList.length; ++i) {
+        ConnEleList[i].dragAlong(NodeList[i], fdx, fdy);
+        tmpx2[i] = ConnEleList[i].tx + fdx;
+        tmpy2[i] = ConnEleList[i].ty + fdy;
+      }
+
       for (let i = 0; i < this.nodes.length; ++i) {
-        this.nodes[i].move(tmpar2[i][0] + fdx, tmpar2[i][1] + fdy);
+        this.nodes[i].move(tmpar2[i][0] + ffdx, tmpar2[i][1] + ffdy);
         this.nodes[i].remainShow();
       }
-      tmpar2 = [];
+
       this.tx = tmpx;
       this.ty = tmpy;
-      // reBuild SameNodeObject after drag stop
+      for (let i = 0; i < ConnEleList.length; i++) {
+        ConnEleList[i].dragAlongStop(tmpx2[i], tmpy2[i]);
+      }
+      ConnEleList = [];
+      NodeList = [];
+      tmpx2 = [];
+      tmpy2 = [];
+      tmpar = [];
       this.reBuildSameNodes();
-    });
-  }
-
-  /**
-   * Function to move/transform breadboard
-   * @param fdx relative x position to move
-   * @param fdy relative y position to move
-   */
-  transformBoardPosition(fdx: number, fdy: number): void {
-    let tmpar = [];
-    let tmpar2 = [];
-    let tmpx = 0;
-    let tmpy = 0;
-    let ffdx = 0;
-    let ffdy = 0;
-
-    ffdx = 0;
-    ffdy = 0;
-    tmpar = [];
-    tmpar2 = [];
-    for (const node of this.nodes) {
-      tmpar2.push(
-        [node.x, node.y]
-      );
-      node.remainHidden();
+      stopdrag.value = false;
     }
-    for (const node of this.joined) {
-      tmpar.push(
-        [node.x, node.y]
-      );
-      node.remainShow();
-    }
-
-    this.elements.transform(`t${this.tx + fdx},${this.ty + fdy}`);
-    tmpx = this.tx + fdx;
-    tmpy = this.ty + fdy;
-    ffdx = fdx;
-    ffdy = fdy;
-    for (let i = 0; i < this.joined.length; ++i) {
-      this.joined[i].move(tmpar[i][0] + fdx, tmpar[i][1] + fdy);
-    }
-
-
-    for (let i = 0; i < this.nodes.length; ++i) {
-      this.nodes[i].move(tmpar2[i][0] + ffdx, tmpar2[i][1] + ffdy);
-      this.nodes[i].remainShow();
-    }
-    this.tx = tmpx;
-    this.ty = tmpy;
-
   }
 
   /**
@@ -817,25 +980,33 @@ export class BreadBoard extends CircuitElement {
           && (labelCalledBy.charCodeAt(0) !== labelParent.charCodeAt(0) || labelCalledBy === labelParent)) {
           return;
         }
-        if (node.label === '+' || node.label === '-') {
-          for (const neigh of ytemp[node.y]) {
-            if (neigh.x !== node.x) {
-              neigh.setValue(value, neigh);
-            }
-          }
-        } else {
-          const op = node.label.charCodeAt(0);
-          if (op >= 102) {
-            for (const neigh of xtemp[node.x]) {
-              if (neigh.y !== node.y && neigh.label.charCodeAt(0) >= 102) {
+        if (!isDragEnable.value) {
+          if (node.label === '-') {
+            for (const neigh of ytemp[node.y]) {
+              if (neigh.x !== node.x && value <= 0) {
                 neigh.setValue(value, neigh);
               }
             }
-          }
-          if (op <= 101) {
-            for (const neigh of xtemp[node.x]) {
-              if (neigh.y !== node.y && neigh.label.charCodeAt(0) <= 101) {
+          } else if (node.label === '+') {
+            for (const neigh of ytemp[node.y]) {
+              if (neigh.x !== node.x) {
                 neigh.setValue(value, neigh);
+              }
+            }
+          } else {
+            const op = node.label.charCodeAt(0);
+            if (op >= 102) {
+              for (const neigh of xtemp[node.x]) {
+                if (neigh.y !== node.y && neigh.label.charCodeAt(0) >= 102) {
+                  neigh.setValue(value, neigh);
+                }
+              }
+            }
+            if (op <= 101) {
+              for (const neigh of xtemp[node.x]) {
+                if (neigh.y !== node.y && neigh.label.charCodeAt(0) <= 101) {
+                  neigh.setValue(value, neigh);
+                }
               }
             }
           }
@@ -849,6 +1020,13 @@ export class BreadBoard extends CircuitElement {
    */
   closeSimulation(): void {
     BreadBoard.visitedNodesv2.clear();
+  }
+  /**
+   * Returns groupings
+   */
+  getGroupings() {
+    const groups = _.cloneDeep(BreadBoard.groupings);
+    return groups;
   }
 
 }

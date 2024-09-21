@@ -26,9 +26,11 @@ export class CodeEditorComponent {
   /**
    * Monaco code editor options
    */
+   size = 15;
   editorOptions = {
     theme: 'vs',
-    language: 'c'
+    language: 'c',
+    fontSize: 15
   };
   /**
    * Instance of Monaco editor
@@ -135,17 +137,28 @@ export class CodeEditorComponent {
         this.selectedIndex = 0;
       }
       // select the code of respective arduino
-      if (this.arduinos.length > 0 && this.codeView) {
+      if (this.arduinos.length > 0) {
         this.code = this.arduinos[this.selectedIndex].code;
-      } else {
-        this.code = '';
-        this.codeChanged();
       }
       // show loading animation if code editor is nor initialized
       if (this.names.length !== 0 && !this.init) {
         window['showLoading']();
       }
     }
+  }
+  /**
+   * Increase the size of the font in the editor
+   */
+  IncreaseFont(fontSize: number) {
+    this.size = this.size + 1;
+    this.editorOptions = {...this.editorOptions, fontSize: this.size};
+  }
+  /**
+   * Decrease the size of the font in the editor
+   */
+  DecreaseFont(fontSize: number) {
+    this.size = this.size - 1;
+    this.editorOptions = {...this.editorOptions, fontSize: this.size};
   }
   /**
    * Download the code from code editor
