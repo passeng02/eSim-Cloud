@@ -731,6 +731,7 @@ export class LCD16X2 extends CircuitElement {
     this.reset();
     this.destroyCharacterPanels();
   }
+
 }
 /**
  * SevenSegment Class

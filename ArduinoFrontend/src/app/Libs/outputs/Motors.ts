@@ -473,7 +473,6 @@ export class Motor extends CircuitElement {
     }
 
   }
-
 }
 
 /**
@@ -977,5 +976,4 @@ export class ServoMotor extends CircuitElement {
     }
     return true;
   }
-
 }

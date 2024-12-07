@@ -64,6 +64,7 @@ export class Battery9v extends CircuitElement {
    */
   closeSimulation(): void {
   }
+
 }
 
 /**

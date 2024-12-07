@@ -614,8 +614,6 @@ export class LED extends CircuitElement {
       }
     }
   }
-
-
 }
 
 /**

@@ -338,6 +338,5 @@ export class Buzzer extends CircuitElement {
         }
       }
     }
-
   }
 }

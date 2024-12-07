@@ -27,6 +27,7 @@ class BreadboardProximityNodeTuple {
  * Resistor Class
  */
 export class Resistor extends CircuitElement {
+
   /**
    * color table(hex values) of resistor
    */
@@ -68,6 +69,7 @@ export class Resistor extends CircuitElement {
   constructor(public canvas: any, x: number, y: number) {
     super('Resistor', x, y, 'Resistor.json', canvas);
   }
+  
   /** init is called when the component is completely drawn to the canvas */
   init() {
     if (Resistor.colorTable.length === 0) {
@@ -359,12 +361,19 @@ export class BreadBoard extends CircuitElement {
     this.subscribeToDragStop({ id: this.id, fn: this.onOtherComponentDragStop.bind(this) });
   }
 
+
+  rotate(): void {
+      super.rotate();
+      this.sortedNodes = _.sortBy(this.nodes, ['x', 'y']);
+    }
+
   /**
    * Returns node connected to arduino
    * @param node node to start search on
    * @param startedOn label of node search started on
    * @returns Arduino connected Node
    */
+
   static getRecArduinov2(node: Point, startedOn: string) {
     try {
       if (node.connectedTo.start.parent.keyName === 'ArduinoUno') {
@@ -658,6 +667,7 @@ export class BreadBoard extends CircuitElement {
         tmpy = this.ty + dy;
         fdx = dx;
         fdy = dy;
+
         for (let i = 0; i < this.joined.length; ++i) {
           this.joined[i].move(tmpar[i][0] + dx, tmpar[i][1] + dy);
         }
@@ -668,6 +678,20 @@ export class BreadBoard extends CircuitElement {
         }
         stopdrag.value = true;
       }
+
+      const bBox = this.elements.getBBox();
+      const cx = this.x + bBox.height / 2;
+      const cy = this.y + bBox.width / 2 ;
+      this.elements.transform(`t${this.tx + dx},${this.ty + dy}`);
+      tmpx = this.tx + dx;
+      tmpy = this.ty + dy;
+      fdx = dx;
+      fdy = dy;
+      this.elements.rotate( this.rotation , this.cx , this.cy );
+      for (let i = 0; i < this.joined.length; ++i) {
+        this.joined[i].move(tmpar[i][0] + dx, tmpar[i][1] + dy);
+      }
+
     }, () => {
       if (isDragEnable.value === true) {
         fdx = 0;
@@ -720,24 +744,14 @@ export class BreadBoard extends CircuitElement {
                 tmpx2.push(0);
                 tmpy2.push(0);
                 NodeList.push(ConnElement2.getNodesCoord());
+              
               }
             }
           }
         }
-      const bBox = this.elements.getBBox();
-      const cx = this.x + bBox.height / 2;
-      const cy = this.y + bBox.width / 2 ;
-      this.elements.transform(`t${this.tx + dx},${this.ty + dy}`);
-      tmpx = this.tx + dx;
-      tmpy = this.ty + dy;
-      fdx = dx;
-      fdy = dy;
-      this.elements.rotate( this.rotation , this.cx , this.cy );
-      for (let i = 0; i < this.joined.length; ++i) {
-        this.joined[i].move(tmpar[i][0] + dx, tmpar[i][1] + dy);
-      }
-
-    }, () => {
+    
+    }
+  }, () => {
       // Push dump to Undo stack & Reset
       if (isDragEnable.value === true) {
         UndoUtils.pushChangeToUndoAndReset({ keyName: this.keyName, element: this.save(), event: 'drag', dragJson: { dx: fdx, dy: fdy } });
@@ -764,7 +778,7 @@ export class BreadBoard extends CircuitElement {
         stopdrag.value = false;
       }
     });
-  }
+  }   
 
   /**
    * Function to move/transform breadboard
@@ -919,6 +933,7 @@ export class BreadBoard extends CircuitElement {
    * @param x: x-coordinate
    * @param y: y-coordinate
    */
+  
   shortlistNodes(x, y) {
     const xIndexFrom = _.sortedIndexBy(this.sortedNodes, { x: x - BreadBoard.PROXIMITY_DISTANCE }, 'x');
     const xIndexTo = _.sortedLastIndexBy(this.sortedNodes, { x: x + BreadBoard.PROXIMITY_DISTANCE }, 'x');

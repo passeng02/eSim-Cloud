@@ -295,7 +295,5 @@ export class Thermistor extends CircuitElement {
         }
       }
     }
-
   }
-
 }

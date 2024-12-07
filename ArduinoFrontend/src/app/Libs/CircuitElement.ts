@@ -323,7 +323,8 @@ export abstract class CircuitElement {
       for (let i = 0; i < this.nodes.length; ++i) {
         this.nodes[i].move(tmpar[i][0] + dx, tmpar[i][1] + dy);
       }
-    }, () => {
+    }
+  }, () => {
       fdx = 0;
       fdy = 0;
       tmpar = [];
@@ -345,6 +346,8 @@ export abstract class CircuitElement {
       this.ty += fdy;
       window['onDragStopEvent'](this);
     });
+
+    
   }
   /**
    * Add Hover Listener
@@ -472,7 +475,7 @@ export abstract class CircuitElement {
   /**
    * Rotates Component
    */
-    rotate(): void {
+  rotate(): void {
     let fdx = 0;
     let fdy = 0;
     const tmpar = [];
@@ -488,6 +491,7 @@ export abstract class CircuitElement {
       tmpar.push(
         [node.x, node.y]
       ); }
+      
     if (this.rotation % 180 === 0) {
       fdx = bBox.height / 2;
       fdy = bBox.width / 2;
@@ -496,9 +500,9 @@ export abstract class CircuitElement {
       fdx = bBox.width / 2;
      }
     for (let i = 0; i < this.nodes.length; ++i) {
-        const nx = - tmpar[i][1] + this.ty + fdy + this.tx + fdx + this.x + this.y - 7;
-        const ny = tmpar[i][0] - this.tx - fdx + this.ty + fdy - this.x + this.y;
-        this.nodes[i].move( nx , ny );
+      const nx = - tmpar[i][1] + this.ty + fdy + this.tx + fdx + this.x + this.y - 7;
+      const ny = tmpar[i][0] - this.tx - fdx + this.ty + fdy - this.x + this.y;
+      this.nodes[i].move( nx , ny );
     }
   }
   /**
@@ -526,8 +530,11 @@ export abstract class CircuitElement {
     }
   }
   dragAlong(tmpar: any, fdx: number, fdy: number): any {
+    
     if (isDragEnable.value === true) {
+      
       this.elements.transform(`t${this.tx + fdx},${this.ty + fdy}`);
+      
       for (const node of this.nodes) {
         tmpar.push(
           [node.x, node.y]
